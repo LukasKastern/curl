@@ -33,8 +33,8 @@
             .lazy = true,
         },
         .boringssl = .{
-            .url = "git+https://github.com/allyourcodebase/boringssl#dd05cc5ae9f4fc0e44ca8a065471b2bc33d63892",
-            .hash = "boringssl-0.20260526.0-EhtkNeQ7AABQYNblwg_0pIRK8CyxZPcutzxKgNuQoYok",
+            .url = "git+https://github.com/allyourcodebase/boringssl#369972b4b13266bd1baf3e67341c1c057d5626ad",
+            .hash = "boringssl-0.20260526.0-EhtkNao-AABFjbYwX3grOdYsY-NbOm4yV2DeZFQ2gMlC",
             .lazy = true,
         },
     },
