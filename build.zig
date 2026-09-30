@@ -13,6 +13,8 @@ pub fn build(b: *std.Build) !void {
     const strip = b.option(bool, "strip", "Omit debug information");
     const pic = b.option(bool, "pie", "Produce Position Independent Code");
 
+    const curl_ca_native = b.option(bool, "ca-native", "Use native CA store") orelse false;
+
     const enable_ssl = b.option(bool, "enable-ssl", "Enable SSL support (default: true)") orelse true;
     const use_schannel = dependentBoolOption(b, "use-schannel", "Enable Windows native SSL/TLS (Schannel)", false, enable_ssl, false);
     const use_mbedtls = dependentBoolOption(b, "use-mbedtls", "Enable mbedTLS for SSL/TLS", false, enable_ssl, false);
@@ -92,7 +94,6 @@ pub fn build(b: *std.Build) !void {
     var disable_mqtt = b.option(bool, "disable-mqtt", "Disable MQTT") orelse false;
     const disable_bindlocal = b.option(bool, "disable-bindlocal", "Disable local binding support") orelse false;
     const disable_netrc = b.option(bool, "disable-netrc", "Disable netrc parser") orelse false;
-    const disable_ntlm = b.option(bool, "disable-ntlm", "Disable NTLM support") orelse false;
     const disable_parsedate = b.option(bool, "disable-parsedate", "Disable date parsing") orelse false;
     var disable_pop3 = b.option(bool, "disable-pop3", "Disable POP3") orelse false;
     const disable_progress_meter = b.option(bool, "disable-progress-meter", "Disable built-in progress meter") orelse false;
@@ -306,6 +307,7 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
+    const boringssl_version: ?[]const u8 = null;
     if (use_openssl) {
         // TODO _curl_ca_bundle_supported
         // TODO HAVE_AWSLC
@@ -661,7 +663,6 @@ pub fn build(b: *std.Build) !void {
         .CURL_DISABLE_BINDLOCAL = disable_bindlocal,
         .CURL_DISABLE_MQTT = disable_mqtt,
         .CURL_DISABLE_NETRC = disable_netrc,
-        .CURL_DISABLE_NTLM = disable_ntlm,
         .CURL_DISABLE_PARSEDATE = disable_parsedate,
         .CURL_DISABLE_POP3 = disable_pop3,
         .CURL_DISABLE_PROGRESS_METER = disable_progress_meter,
@@ -670,7 +671,6 @@ pub fn build(b: *std.Build) !void {
         .CURL_DISABLE_RTSP = disable_rtsp,
         .CURL_DISABLE_SHA512_256 = disable_sha512_256,
         .CURL_DISABLE_SHUFFLE_DNS = disable_shuffle_dns,
-        .CURL_DISABLE_SMB = disable_smb,
         .CURL_DISABLE_SMTP = disable_smtp,
         .CURL_DISABLE_WEBSOCKETS = disable_websockets,
         .CURL_DISABLE_SOCKETPAIR = disable_socketpair,
@@ -680,6 +680,9 @@ pub fn build(b: *std.Build) !void {
         .CURL_DISABLE_CA_SEARCH = disable_ca_search,
         .CURL_CA_SEARCH_SAFE = ca_search_safe,
         .CURL_EXTERN_SYMBOL = if (hidden_symbols) "__attribute__((__visibility__(\"default\")))" else null,
+        .CURL_BORINGSSL_VERSION = boringssl_version, // TODO
+        .CURL_CA_NATIVE = curl_ca_native, //iNOT USE_APPLE_SECTRUST AND _ssl_enabled AND CURL_CA_NATIVE)
+        .CURL_PATCHSTAMP = null,
         .USE_WIN32_CRYPTO = target.result.os.tag == .windows, // Assumes 'NOT WINDOWS_STORE'
         .USE_WIN32_LDAP = target.result.os.tag == .windows and use_win32_ldap and !disable_ldap, // Assumes 'NOT WINDOWS_STORE'
         .USE_IPV6 = enable_ipv6,
@@ -724,7 +727,6 @@ pub fn build(b: *std.Build) !void {
         .HAVE_FREEADDRINFO = target.result.os.tag != .wasi,
         .HAVE_FSEEKO = target.result.os.tag != .windows,
         .HAVE_DECL_FSEEKO = target.result.os.tag != .windows,
-        .HAVE_FTRUNCATE = true,
         .HAVE_GETADDRINFO = target.result.os.tag != .wasi,
         .HAVE_GETADDRINFO_THREADSAFE = target.result.os.tag != .wasi and target.result.os.tag != .openbsd,
         .HAVE_GETEUID = target.result.os.tag != .windows and target.result.os.tag != .wasi,
@@ -761,8 +763,6 @@ pub fn build(b: *std.Build) !void {
         .HAVE_GSSGNU = null,
         .CURL_KRB5_VERSION = null,
         .HAVE_IFADDRS_H = target.result.os.tag != .windows,
-        .HAVE_INET_NTOP = target.result.os.tag != .windows,
-        .HAVE_INET_PTON = target.result.os.tag != .windows,
         .HAVE_SA_FAMILY_T = target.result.os.tag != .windows,
         // .HAVE_ADDRESS_FAMILY = target.result.os.tag == .windows,
         .HAVE_IOCTLSOCKET = target.result.os.tag == .windows,
@@ -784,9 +784,7 @@ pub fn build(b: *std.Build) !void {
         .HAVE_ZSTD = use_zstd,
         .HAVE_LOCALE_H = true,
         .HAVE_LOCALTIME_R = target.result.os.tag != .windows,
-        .HAVE_LONGLONG = true,
         .HAVE_SUSECONDS_T = target.result.os.tag != .windows,
-        .HAVE_MSG_NOSIGNAL = target.result.os.tag != .windows and target.result.os.tag != .wasi,
         .HAVE_NETDB_H = target.result.os.tag != .windows,
         .HAVE_NETINET_IN_H = target.result.os.tag != .windows,
         .HAVE_NETINET_IN6_H = null,
@@ -821,7 +819,6 @@ pub fn build(b: *std.Build) !void {
         .HAVE_PWD_H = target.result.os.tag != .windows,
         .HAVE_SSL_SET0_WBIO = null, // TODO
         .HAVE_RECV = true,
-        .HAVE_SELECT = true,
         .HAVE_SCHED_YIELD = target.result.os.tag != .windows,
         .HAVE_SEND = true,
         .HAVE_SENDMSG = target.result.os.tag != .windows and target.result.os.tag != .wasi,
@@ -845,25 +842,20 @@ pub fn build(b: *std.Build) !void {
         },
         .HAVE_FSETXATTR_6 = null,
         .HAVE_SETLOCALE = true,
-        .HAVE_SETMODE = target.result.os.tag == .windows or target.result.os.tag.isBSD(),
-        .HAVE__SETMODE = target.result.os.tag == .windows,
         .HAVE_SETRLIMIT = target.result.os.tag != .wasi,
         .HAVE_SETSOCKOPT_SO_NONBLOCK = null,
         .HAVE_SIGACTION = target.result.os.tag != .windows and target.result.os.tag != .wasi,
         .HAVE_SIGINTERRUPT = target.result.os.tag != .windows and target.result.os.tag != .wasi,
         .HAVE_SIGNAL = target.result.os.tag != .wasi,
         .HAVE_SIGSETJMP = target.result.os.tag != .windows and target.result.os.tag != .wasi,
-        .HAVE_SNPRINTF = true,
         .HAVE_SOCKADDR_IN6_SIN6_SCOPE_ID = target.result.os.tag == .windows, // TODO
         .HAVE_SOCKET = target.result.os.tag != .wasi,
         .HAVE_PROTO_BSDSOCKET_H = null,
         .HAVE_SOCKETPAIR = target.result.os.tag != .windows and target.result.os.tag != .wasi,
         .HAVE_STDATOMIC_H = true,
         .HAVE_STDBOOL_H = true,
-        .HAVE_STDINT_H = true,
         .HAVE_STRCASECMP = target.result.os.tag != .windows,
         .HAVE_STRCMPI = null,
-        .HAVE_STRDUP = true,
         .HAVE_STRERROR_R = target.result.os.tag != .windows,
         .HAVE_STRICMP = null,
         .HAVE_STRINGS_H = true,
@@ -895,7 +887,6 @@ pub fn build(b: *std.Build) !void {
         .CURL_OS = b.fmt("\"{s}\"", .{target.result.zigTriple(b.allocator) catch @panic("OOM")}),
         .SIZEOF_INT_CODE = b.fmt("#define SIZEOF_INT {?d}", .{target.result.cTypeByteSize(.int)}),
         .SIZEOF_LONG_CODE = b.fmt("#define SIZEOF_LONG {?d}", .{target.result.cTypeByteSize(.long)}),
-        .SIZEOF_LONG_LONG_CODE = b.fmt("#define SIZEOF_LONG_LONG {?d}", .{target.result.cTypeByteSize(.longlong)}),
         .SIZEOF_OFF_T_CODE = b.fmt("#define SIZEOF_OFF_T {d}", .{8}),
         .SIZEOF_CURL_OFF_T_CODE = b.fmt("#define SIZEOF_CURL_OFF_T {d}", .{8}),
         .SIZEOF_CURL_SOCKET_T_CODE = b.fmt("#define SIZEOF_CURL_SOCKET_T {d}", .{@as(i64, if (target.result.os.tag == .windows) 8 else 4)}),
@@ -907,16 +898,12 @@ pub fn build(b: *std.Build) !void {
         // .PACKAGE_STRING = "curl",
         // .PACKAGE_TARNAME = "curl",
         // .PACKAGE_VERSION = b.fmt("{f}", .{version}),
-        .STDC_HEADERS = true,
         .USE_ARES = enable_ares,
-        .USE_THREADS_POSIX = enable_threaded_resolver and target.result.os.tag != .windows and !target.result.os.tag.isBSD(),
-        .USE_THREADS_WIN32 = enable_threaded_resolver and target.result.os.tag == .windows,
         .USE_GNUTLS = use_gnutls,
         .USE_SSLS_EXPORT = use_ssls_export,
         .USE_MBEDTLS = use_mbedtls,
         .USE_RUSTLS = use_rustls,
         .USE_WOLFSSL = use_wolfssl,
-        .HAVE_WOLFSSL_DES_ECB_ENCRYPT = use_wolfssl and false, // TODO
         // .HAVE_WOLFSSL_BIO = use_wolfssl and false, // TODO
         // .HAVE_WOLFSSL_FULL_BIO = use_wolfssl and false, // TODO
         .USE_LIBSSH = use_libssh and !use_libssh2,
@@ -925,7 +912,6 @@ pub fn build(b: *std.Build) !void {
         .USE_OPENLDAP = !disable_ldap and !use_win32_ldap, // TODO
         .USE_OPENSSL = use_openssl,
         .USE_AMISSL = null, // AMIGA
-        .USE_LIBRTMP = use_librtmp,
         .USE_GSASL = use_gsasl,
         .USE_LIBUV = use_libuv,
         .HAVE_UV_H = use_libuv,
@@ -934,7 +920,6 @@ pub fn build(b: *std.Build) !void {
         .USE_NGTCP2 = use_ngtcp2,
         .USE_NGHTTP3 = use_ngtcp2, // same condition
         .USE_QUICHE = use_quiche,
-        .USE_OPENSSL_QUIC = use_openssl_quic,
         .HAVE_QUICHE_CONN_SET_QLOG_FD = null, // TODO
         .USE_UNIX_SOCKETS = target.result.os.tag == .windows or enable_unix_sockets,
         // .USE_WIN32_LARGE_FILES = target.result.os.tag == .windows,
@@ -952,9 +937,6 @@ pub fn build(b: *std.Build) !void {
         .HAVE_MACH_ABSOLUTE_TIME = target.result.os.tag.isDarwin(),
         .USE_WIN32_IDN = target.result.os.tag == .windows and use_win32_idn,
         .USE_APPLE_IDN = target.result.os.tag.isDarwin() and use_apple_idn,
-        .HAVE_OPENSSL_SRP = null, // TODO
-        .HAVE_GNUTLS_SRP = null, // TODO
-        .USE_TLS_SRP = null, // TODO
         .USE_HTTPSRR = httpsrr,
         .USE_ECH = ech,
         .HAVE_WOLFSSL_CTX_GENERATEECHCONFIG = null, // TODO
@@ -1004,13 +986,16 @@ fn dependentBoolOption(
 /// `LIB_CURLX_CFILES` in `lib/Makefile.inc`.
 const lib_curlx_sources: []const []const u8 = &.{
     "curlx/base64.c",
+    "curlx/basename.c",
     "curlx/dynbuf.c",
     "curlx/fopen.c",
     "curlx/inet_ntop.c",
     "curlx/inet_pton.c",
     "curlx/multibyte.c",
     "curlx/nonblock.c",
+    "curlx/snprintf.c",
     "curlx/strcopy.c",
+    "curlx/strdup.c",
     "curlx/strerr.c",
     "curlx/strparse.c",
     "curlx/timediff.c",
@@ -1023,9 +1008,8 @@ const lib_curlx_sources: []const []const u8 = &.{
 
 /// `LIB_CURLX_CFILES` in `lib/Makefile.inc`.
 const lib_curlx_headers: []const []const u8 = &.{
-    "curlx/binmode.h",
     "curlx/base64.h",
-    "curlx/curlx.h",
+    "curlx/basename.h",
     "curlx/dynbuf.h",
     "curlx/fopen.h",
     "curlx/inet_ntop.h",
@@ -1034,6 +1018,7 @@ const lib_curlx_headers: []const []const u8 = &.{
     "curlx/nonblock.h",
     "curlx/snprintf.h",
     "curlx/strcopy.h",
+    "curlx/strdup.h",
     "curlx/strerr.h",
     "curlx/strparse.h",
     "curlx/timediff.h",
@@ -1064,8 +1049,31 @@ const lib_vauth_sources: []const []const u8 = &.{
 /// `LIB_VAUTH_HFILES` in `lib/Makefile.inc`.
 const lib_vauth_headers: []const []const u8 = &.{
     "vauth/digest.h",
-    "vauth/ntlm.h",
     "vauth/vauth.h",
+};
+
+/// `LIB_VDNS_CFILES` in `lib/Makefile.inc`.
+const lib_vdns_cfiles: []const []const u8 = &.{
+    "vdns/asyn-ares.c",
+    "vdns/asyn-base.c",
+    "vdns/asyn-thrdd.c",
+    "vdns/cf-dns.c",
+    "vdns/dnscache.c",
+    "vdns/doh.c",
+    "vdns/hostip.c",
+    "vdns/hostip4.c",
+    "vdns/hostip6.c",
+    "vdns/httpsrr.c",
+};
+
+/// `LIB_VDNS_HFILES` in `lib/Makefile.inc`.
+const lib_vdns_headers: []const []const u8 = &.{
+    "vdns/asyn.h",
+    "vdns/cf-dns.h",
+    "vdns/dnscache.h",
+    "vdns/doh.h",
+    "vdns/hostip.h",
+    "vdns/httpsrr.h",
 };
 
 /// `LIB_VTLS_CFILES` in `lib/Makefile.inc`.
@@ -1081,6 +1089,7 @@ const lib_vtls_sources: []const []const u8 = &.{
     "vtls/schannel.c",
     "vtls/schannel_verify.c",
     "vtls/vtls.c",
+    "vtls/vtls_config.c",
     "vtls/vtls_scache.c",
     "vtls/vtls_spack.c",
     "vtls/wolfssl.c",
@@ -1100,6 +1109,7 @@ const lib_vtls_headers: []const []const u8 = &.{
     "vtls/schannel.h",
     "vtls/schannel_int.h",
     "vtls/vtls.h",
+    "vtls/vtls_config.h",
     "vtls/vtls_int.h",
     "vtls/vtls_scache.h",
     "vtls/vtls_spack.h",
@@ -1109,18 +1119,24 @@ const lib_vtls_headers: []const []const u8 = &.{
 
 /// `LIB_VQUIC_CFILES` in `lib/Makefile.inc`.
 const lib_vquic_sources: []const []const u8 = &.{
-    "vquic/curl_ngtcp2.c",
-    "vquic/curl_osslq.c",
-    "vquic/curl_quiche.c",
+    "vquic/capsule.c",
+    "vquic/cf-capsule.c",
+    "vquic/cf-ngtcp2.c",
+    "vquic/cf-ngtcp2-cmn.c",
+    "vquic/cf-ngtcp2-proxy.c",
+    "vquic/cf-quiche.c",
     "vquic/vquic.c",
     "vquic/vquic-tls.c",
 };
 
 /// `LIB_VQUIC_HFILES` in `lib/Makefile.inc`.
 const lib_vquic_headers: []const []const u8 = &.{
-    "vquic/curl_ngtcp2.h",
-    "vquic/curl_osslq.h",
-    "vquic/curl_quiche.h",
+    "vquic/capsule.h",
+    "vquic/cf-capsule.h",
+    "vquic/cf-ngtcp2.h",
+    "vquic/cf-ngtcp2-cmn.h",
+    "vquic/cf-ngtcp2-proxy.h",
+    "vquic/cf-quiche.h",
     "vquic/vquic.h",
     "vquic/vquic_int.h",
     "vquic/vquic-tls.h",
@@ -1143,9 +1159,7 @@ const lib_vssh_headers: []const []const u8 = &.{
 const lib_sources: []const []const u8 = &.{
     "altsvc.c",
     "amigaos.c",
-    "asyn-ares.c",
-    "asyn-base.c",
-    "asyn-thrdd.c",
+    "api.c",
     "bufq.c",
     "bufref.c",
     "cf-h1-proxy.c",
@@ -1153,12 +1167,15 @@ const lib_sources: []const []const u8 = &.{
     "cf-haproxy.c",
     "cf-https-connect.c",
     "cf-ip-happy.c",
+    "cf-recvbuf.c",
+    "cf-setup.c",
     "cf-socket.c",
     "cfilters.c",
     "conncache.c",
     "connect.c",
     "content_encoding.c",
     "cookie.c",
+    "creds.c",
     "cshutdn.c",
     "curl_addrinfo.c",
     "curl_endian.c",
@@ -1170,7 +1187,6 @@ const lib_sources: []const []const u8 = &.{
     "curl_memrchr.c",
     "curl_ntlm_core.c",
     "curl_range.c",
-    "curl_rtmp.c",
     "curl_sasl.c",
     "curl_sha512_256.c",
     "curl_share.c",
@@ -1180,7 +1196,6 @@ const lib_sources: []const []const u8 = &.{
     "cw-out.c",
     "cw-pause.c",
     "dict.c",
-    "doh.c",
     "dynhds.c",
     "easy.c",
     "easygetopt.c",
@@ -1198,20 +1213,18 @@ const lib_sources: []const []const u8 = &.{
     "hash.c",
     "headers.c",
     "hmac.c",
-    "hostip.c",
-    "hostip4.c",
-    "hostip6.c",
     "hsts.c",
     "http.c",
     "http1.c",
     "http2.c",
     "http_aws_sigv4.c",
+    "http_httpsig.c",
+    "curl_ed25519.c",
     "http_chunks.c",
     "http_digest.c",
     "http_negotiate.c",
     "http_ntlm.c",
     "http_proxy.c",
-    "httpsrr.c",
     "idn.c",
     "if2ip.c",
     "imap.c",
@@ -1228,12 +1241,14 @@ const lib_sources: []const []const u8 = &.{
     "multi_ev.c",
     "multi_ntfy.c",
     "netrc.c",
-    "noproxy.c",
     "openldap.c",
     "parsedate.c",
+    "peer.c",
     "pingpong.c",
     "pop3.c",
     "progress.c",
+    "protocol.c",
+    "proxy.c",
     "psl.c",
     "rand.c",
     "ratelimit.c",
@@ -1252,15 +1267,17 @@ const lib_sources: []const []const u8 = &.{
     "socks_sspi.c",
     "splay.c",
     "strcase.c",
-    "strdup.c",
     "strequal.c",
     "strerror.c",
     "system_win32.c",
     "telnet.c",
     "tftp.c",
+    "thrdpool.c",
+    "thrdqueue.c",
     "transfer.c",
     "uint-bset.c",
     "uint-hash.c",
+    "uint-hashset.c",
     "uint-spbset.c",
     "uint-table.c",
     "url.c",
@@ -1273,8 +1290,8 @@ const lib_sources: []const []const u8 = &.{
 const lib_headers: []const []const u8 = &.{
     "altsvc.h",
     "amigaos.h",
+    "api.h",
     "arpa_telnet.h",
-    "asyn.h",
     "bufq.h",
     "bufref.h",
     "cf-h1-proxy.h",
@@ -1282,6 +1299,8 @@ const lib_headers: []const []const u8 = &.{
     "cf-haproxy.h",
     "cf-https-connect.h",
     "cf-ip-happy.h",
+    "cf-recvbuf.h",
+    "cf-setup.h",
     "cf-socket.h",
     "cfilters.h",
     "conncache.h",
@@ -1289,6 +1308,7 @@ const lib_headers: []const []const u8 = &.{
     "connect.h",
     "content_encoding.h",
     "cookie.h",
+    "creds.h",
     "curl_addrinfo.h",
     "curl_ctype.h",
     "curl_endian.h",
@@ -1305,10 +1325,8 @@ const lib_headers: []const []const u8 = &.{
     "curl_ntlm_core.h",
     "curl_printf.h",
     "curl_range.h",
-    "curl_rtmp.h",
     "curl_sasl.h",
     "curl_setup.h",
-    "curl_setup_once.h",
     "curl_sha256.h",
     "curl_sha512_256.h",
     "curl_share.h",
@@ -1318,7 +1336,6 @@ const lib_headers: []const []const u8 = &.{
     "cw-out.h",
     "cw-pause.h",
     "dict.h",
-    "doh.h",
     "dynhds.h",
     "easy_lock.h",
     "easyif.h",
@@ -1329,24 +1346,25 @@ const lib_headers: []const []const u8 = &.{
     "fileinfo.h",
     "formdata.h",
     "ftp.h",
+    "ftp-int.h",
     "ftplistparser.h",
     "functypes.h",
     "getinfo.h",
     "gopher.h",
     "hash.h",
     "headers.h",
-    "hostip.h",
     "hsts.h",
     "http.h",
     "http1.h",
     "http2.h",
     "http_aws_sigv4.h",
+    "http_httpsig.h",
+    "curl_ed25519.h",
     "http_chunks.h",
     "http_digest.h",
     "http_negotiate.h",
     "http_ntlm.h",
     "http_proxy.h",
-    "httpsrr.h",
     "idn.h",
     "if2ip.h",
     "imap.h",
@@ -1359,11 +1377,13 @@ const lib_headers: []const []const u8 = &.{
     "multi_ntfy.h",
     "multiif.h",
     "netrc.h",
-    "noproxy.h",
     "parsedate.h",
+    "peer.h",
     "pingpong.h",
     "pop3.h",
     "progress.h",
+    "protocol.h",
+    "proxy.h",
     "psl.h",
     "rand.h",
     "ratelimit.h",
@@ -1384,14 +1404,16 @@ const lib_headers: []const []const u8 = &.{
     "socks.h",
     "splay.h",
     "strcase.h",
-    "strdup.h",
     "strerror.h",
     "system_win32.h",
     "telnet.h",
     "tftp.h",
+    "thrdpool.h",
+    "thrdqueue.h",
     "transfer.h",
     "uint-bset.h",
     "uint-hash.h",
+    "uint-hashset.h",
     "uint-spbset.h",
     "uint-table.h",
     "url.h",
@@ -1401,19 +1423,21 @@ const lib_headers: []const []const u8 = &.{
 };
 
 /// `CSOURCES` in `lib/Makefile.inc`.
-const sources = lib_sources ++ lib_vauth_sources ++ lib_vtls_sources ++ lib_vquic_sources ++ lib_vssh_sources ++ lib_curlx_sources;
+const sources = lib_sources ++ lib_vauth_sources ++ lib_vtls_sources ++ lib_vquic_sources ++ lib_vssh_sources ++ lib_curlx_sources ++ lib_vdns_cfiles;
 
 /// `HHEADERS` in `lib/Makefile.inc`.
-const headers = lib_headers ++ lib_vauth_headers ++ lib_vtls_headers ++ lib_vquic_headers ++ lib_vssh_headers ++ lib_curlx_headers;
+const headers = lib_headers ++ lib_vauth_headers ++ lib_vtls_headers ++ lib_vquic_headers ++ lib_vssh_headers ++ lib_curlx_headers ++ lib_vdns_headers;
 
 /// `CURLX_CFILES` in `src/Makefile.inc`.
 const curlx_sources: []const []const u8 = &.{
     "curlx/base64.c",
+    "curlx/basename.c",
     "curlx/dynbuf.c",
     "curlx/fopen.c",
     "curlx/multibyte.c",
     "curlx/nonblock.c",
     "curlx/strcopy.c",
+    "curlx/strdup.c",
     "curlx/strerr.c",
     "curlx/strparse.c",
     "curlx/timediff.c",
@@ -1427,13 +1451,14 @@ const curlx_sources: []const []const u8 = &.{
 /// `CURLX_HFILES` in `src/Makefile.inc`.
 const curlx_headers: []const []const u8 = &.{
     "curl_setup.h",
-    "curlx/binmode.h",
+    "curlx/base64.h",
+    "curlx/basename.h",
     "curlx/dynbuf.h",
     "curlx/fopen.h",
     "curlx/multibyte.h",
     "curlx/nonblock.h",
-    "curlx/snprintf.h",
     "curlx/strcopy.h",
+    "curlx/strdup.h",
     "curlx/strerr.h",
     "curlx/strparse.h",
     "curlx/timediff.h",
@@ -1449,7 +1474,6 @@ const exe_sources: []const []const u8 = &.{
     "config2setopts.c",
     "slist_wc.c",
     "terminal.c",
-    "tool_bname.c",
     "tool_cb_dbg.c",
     "tool_cb_hdr.c",
     "tool_cb_prg.c",
@@ -1481,7 +1505,6 @@ const exe_sources: []const []const u8 = &.{
     "tool_setopt.c",
     "tool_ssls.c",
     "tool_stderr.c",
-    "tool_strdup.c",
     "tool_urlglob.c",
     "tool_util.c",
     "tool_vms.c",
@@ -1497,7 +1520,6 @@ const exe_header: []const []const u8 = &.{
     "config2setopts.h",
     "slist_wc.h",
     "terminal.h",
-    "tool_bname.h",
     "tool_cb_dbg.h",
     "tool_cb_hdr.h",
     "tool_cb_prg.h",
@@ -1530,7 +1552,6 @@ const exe_header: []const []const u8 = &.{
     "tool_setup.h",
     "tool_ssls.h",
     "tool_stderr.h",
-    "tool_strdup.h",
     "tool_urlglob.h",
     "tool_util.h",
     "tool_version.h",
