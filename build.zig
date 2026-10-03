@@ -320,7 +320,6 @@ pub fn build(b: *std.Build) !void {
                 .target = target,
                 .optimize = optimize,
             })) |dependency| {
-                curl.root_module.linkLibrary(dependency.artifact("bcm"));
                 curl.root_module.linkLibrary(dependency.artifact("ssl"));
                 curl.root_module.linkLibrary(dependency.artifact("crypto"));
                 curl.root_module.addIncludePath(dependency.namedLazyPath("ssl_include"));
