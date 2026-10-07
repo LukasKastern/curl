@@ -942,6 +942,8 @@ pub fn build(b: *std.Build) !void {
         .HAVE_WOLFSSL_CTX_GENERATEECHCONFIG = null, // TODO
         .HAVE_SSL_SET1_ECH_CONFIG_LIST = null, // TODO
         .HAVE_DES_ECB_ENCRYPT = false, // TODO
+        .USE_RESOLV_THREADED = enable_threaded_resolver,
+        .HAVE_THREADS_POSIX = enable_threaded_resolver and target.result.os.tag != .windows and !target.result.os.tag.isBSD(),
     });
     curl.root_module.addConfigHeader(curl_config);
     exe.root_module.addConfigHeader(curl_config);
